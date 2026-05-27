@@ -1,0 +1,12 @@
+target/
+node_modules/
+dist/
+out/
+*.log
+.DS_Store
+.env
+.env.local
+controller-ui/dist/
+display-app/dist/
+display-app/src/generated/protocol.ts
+coordinator/embed/

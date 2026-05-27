@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = ["coordinator"]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+authors = ["Joseph Odeh"]
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

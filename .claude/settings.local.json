@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(mkdir -p /Users/josephodeh/.claude/plans 2>&1)"
+    ]
+  }
+}

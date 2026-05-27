@@ -1,0 +1,17 @@
+{
+  "name": "video-screen-split",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "controller-ui",
+    "display-app"
+  ],
+  "scripts": {
+    "build:ui": "npm --workspace=controller-ui run build",
+    "build:coordinator": "cargo build -p coordinator --release",
+    "build:display-app": "npm --workspace=display-app run build",
+    "dev:ui": "npm --workspace=controller-ui run dev",
+    "dev:coordinator": "cargo run -p coordinator",
+    "dev:display-app": "npm --workspace=display-app run dev"
+  }
+}

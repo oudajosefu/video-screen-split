@@ -1,0 +1,22 @@
+{
+  "appId": "com.josephodeh.video-screen-split",
+  "productName": "video-screen-split",
+  "directories": {
+    "output": "out"
+  },
+  "files": [
+    "dist/**/*",
+    "package.json"
+  ],
+  "mac": {
+    "category": "public.app-category.video",
+    "target": ["dir"]
+  },
+  "win": {
+    "target": ["dir"]
+  },
+  "linux": {
+    "target": ["AppImage"]
+  },
+  "afterSign": "scripts/vmp-sign.cjs"
+}
