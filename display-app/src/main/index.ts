@@ -1,10 +1,11 @@
 import { app, ipcMain, screen, BrowserWindow } from "electron";
 import path from "node:path";
-import { loadOrInitConfig } from "./config";
+import { loadOrInitConfig, persistCoordinatorUrl } from "./config";
 import { spawnQuadrantWindow } from "./displays";
 import { discoverCoordinator } from "./discovery";
 import { CoordinatorClient } from "./sync";
 import { enumerateDisplays, platformLabel } from "./host";
+import { promptForCoordinatorUrl } from "./setup-prompt";
 import type { Dimensions } from "@proto/Dimensions";
 import type { WallState } from "@proto/WallState";
 import type { Quadrant } from "@proto/Quadrant";
@@ -101,10 +102,18 @@ async function resolveCoordinatorUrl(configured?: string): Promise<string> {
     return configured;
   }
   console.log("discovering coordinator via mDNS...");
-  const { host, port } = await discoverCoordinator();
-  const url = `ws://${host}:${port}/ws`;
-  console.log("found coordinator:", url);
-  return url;
+  try {
+    const { host, port } = await discoverCoordinator(5_000);
+    const url = `ws://${host}:${port}/ws`;
+    console.log("found coordinator:", url);
+    persistCoordinatorUrl(url);
+    return url;
+  } catch (e) {
+    console.log("mDNS failed, asking user for coordinator URL");
+    const url = await promptForCoordinatorUrl("ws://localhost:8787/ws");
+    persistCoordinatorUrl(url);
+    return url;
+  }
 }
 
 async function main(): Promise<void> {
