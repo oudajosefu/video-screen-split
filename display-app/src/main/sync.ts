@@ -7,6 +7,7 @@ import type { WallState } from "@proto/WallState";
 import type { DisplayInfo } from "@proto/DisplayInfo";
 import type { Quadrant } from "@proto/Quadrant";
 import type { Dimensions } from "@proto/Dimensions";
+import type { WallCommand } from "@proto/WallCommand";
 
 const RECONNECT_MS = 2000;
 
@@ -39,6 +40,10 @@ export class CoordinatorClient extends EventEmitter {
   announce(args: AnnounceArgs): void {
     this.lastAnnounce = args;
     this.sendAnnounce();
+  }
+
+  sendCommand(command: WallCommand): void {
+    this.send({ type: "command", command });
   }
 
   sendHeartbeat(

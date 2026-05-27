@@ -9,6 +9,7 @@ import { promptForCoordinatorUrl } from "./setup-prompt";
 import type { Dimensions } from "@proto/Dimensions";
 import type { WallState } from "@proto/WallState";
 import type { Quadrant } from "@proto/Quadrant";
+import type { WallCommand } from "@proto/WallCommand";
 
 app.setName("video-screen-split");
 
@@ -171,6 +172,12 @@ async function main(): Promise<void> {
 
   client.on("connected", () => console.log("coordinator: connected"));
   client.on("disconnected", () => console.log("coordinator: disconnected"));
+
+  ipcMain.on("display:command", (event, command: WallCommand) => {
+    // Only accept commands from our own quadrant windows.
+    if (!manager.isOwnedBy(event.sender)) return;
+    client.sendCommand(command);
+  });
 
   ipcMain.on(
     "display:heartbeat",
