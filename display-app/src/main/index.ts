@@ -17,49 +17,31 @@ const PRELOAD = path.join(__dirname, "..", "preload", "index.js");
 interface OpenWindow {
   window: BrowserWindow;
   displayId: string;
+  loadedUrl: string | null;
 }
 
 /**
  * Owns the set of open quadrant windows on this machine and keeps them in
- * sync with the coordinator's layout state.
+ * sync with the coordinator's layout + source URL state.
  */
 class WindowManager {
   private windows = new Map<Quadrant, OpenWindow>();
+  private latestState: WallState | null = null;
 
   constructor(private readonly hostId: string) {}
 
-  reconcile(state: WallState): void {
-    const desired = this.desiredForThisHost(state);
-
-    // Close windows no longer assigned to this host.
-    for (const [quadrant, open] of this.windows) {
-      const stillWanted = desired.get(quadrant);
-      if (!stillWanted) {
-        console.log(`closing window for ${quadrant} (no longer assigned)`);
-        open.window.destroy();
-        this.windows.delete(quadrant);
-      } else if (stillWanted !== open.displayId) {
-        // Reassigned to a different display: close so we re-open below.
-        console.log(
-          `closing window for ${quadrant} (display changed ${open.displayId}→${stillWanted})`,
-        );
-        open.window.destroy();
-        this.windows.delete(quadrant);
+  applyState(state: WallState): void {
+    this.latestState = state;
+    this.reconcileWindows(state);
+    this.reconcileNavigation(state);
+    // Forward to already-loaded pages so they can apply play/pause/seek/etc.
+    // Pages still navigating will re-receive state via the did-finish-load
+    // handler set up in openOrReuse().
+    for (const { window, loadedUrl } of this.windows.values()) {
+      if (window.isDestroyed()) continue;
+      if (loadedUrl && loadedUrl === state.source_url) {
+        window.webContents.send("display:state", state);
       }
-    }
-
-    // Open windows for newly assigned quadrants.
-    for (const [quadrant, displayId] of desired) {
-      if (this.windows.has(quadrant)) continue;
-      console.log(`opening window for ${quadrant} on display ${displayId}`);
-      const window = spawnQuadrantWindow(quadrant, displayId, PRELOAD);
-      this.windows.set(quadrant, { window, displayId });
-    }
-  }
-
-  forwardToAll(channel: string, payload: unknown): void {
-    for (const { window } of this.windows.values()) {
-      if (!window.isDestroyed()) window.webContents.send(channel, payload);
     }
   }
 
@@ -82,6 +64,55 @@ class WindowManager {
       if (!window.isDestroyed()) window.destroy();
     }
     this.windows.clear();
+  }
+
+  private reconcileWindows(state: WallState): void {
+    const desired = this.desiredForThisHost(state);
+
+    for (const [quadrant, open] of this.windows) {
+      const wantedDisplay = desired.get(quadrant);
+      if (!wantedDisplay) {
+        console.log(`closing window for ${quadrant} (no longer assigned)`);
+        open.window.destroy();
+        this.windows.delete(quadrant);
+      } else if (wantedDisplay !== open.displayId) {
+        console.log(
+          `closing window for ${quadrant} (display changed ${open.displayId}→${wantedDisplay})`,
+        );
+        open.window.destroy();
+        this.windows.delete(quadrant);
+      }
+    }
+
+    for (const [quadrant, displayId] of desired) {
+      if (this.windows.has(quadrant)) continue;
+      console.log(`opening window for ${quadrant} on display ${displayId}`);
+      const window = spawnQuadrantWindow(quadrant, displayId, PRELOAD);
+      const entry: OpenWindow = { window, displayId, loadedUrl: null };
+      this.windows.set(quadrant, entry);
+
+      window.webContents.on("did-finish-load", () => {
+        if (!this.latestState) return;
+        // After every navigation, re-deliver the latest state so the preload
+        // (which just freshly initialized in the new page) can apply crop,
+        // play/pause, seek, and audio routing.
+        window.webContents.send("display:state", this.latestState);
+      });
+    }
+  }
+
+  private reconcileNavigation(state: WallState): void {
+    const target = state.source_url ?? "about:blank";
+    for (const entry of this.windows.values()) {
+      if (entry.window.isDestroyed()) continue;
+      if (entry.loadedUrl === target) continue;
+      console.log(`navigating window → ${target}`);
+      entry.loadedUrl = target;
+      entry.window.loadURL(target).catch((e) => {
+        console.warn(`navigation failed: ${e?.message ?? e}`);
+        entry.loadedUrl = null;
+      });
+    }
   }
 
   private desiredForThisHost(state: WallState): Map<Quadrant, string> {
@@ -131,8 +162,7 @@ async function main(): Promise<void> {
   const manager = new WindowManager(cfg.hostId);
 
   client.on("state", (state: WallState) => {
-    manager.reconcile(state);
-    manager.forwardToAll("display:state", state);
+    manager.applyState(state);
   });
 
   client.on("correct", (quadrant: Quadrant, to: number) => {
